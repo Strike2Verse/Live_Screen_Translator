@@ -1,0 +1,8 @@
+PySide6>=6.6.0
+opencv-python>=4.9.0.80
+numpy>=1.26.0
+pytesseract>=0.3.10
+requests>=2.31.0
+pycountry>=23.12.11 
+libretranslate
+argostranslate
