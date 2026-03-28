@@ -1,58 +1,60 @@
-# 🌐 Live Screen Translator Overlay
+# 🌐 Live Screen Translator
 
-A real-time **screen text translation overlay** built with **PySide6, OpenCV, Tesseract OCR, and LibreTranslate**.
+> A real-time **screen text translation overlay** built with **PySide6, OpenCV, Tesseract OCR, and LibreTranslate**.
 
-> Capture text from any part of your screen and instantly translate it into your desired language — live, fast, and offline-capable.
+> ⚡ **Live • Smooth • Offline-Capable • Multi-Language**
 
----
-
-## ✨ Features
-
-🚀 **Real-time OCR + Translation**
-
-* Captures screen region continuously
-* Extracts text using Tesseract OCR
-* Translates instantly using LibreTranslate
-
-🎯 **Smart Text Stabilization**
-
-* Avoids flickering using frame consistency detection
-* Only updates when text is stable
-
-🧠 **Intelligent Caching**
-
-* Prevents duplicate API calls
-* Improves performance and reduces load
-
-🪟 **Movable & Resizable Overlay**
-
-* Drag anywhere on screen
-* Resize dynamically
-* Always-on-top UI
-
-🌍 **Dynamic Language Selection**
-
-* Detects installed OCR languages
-* Fetches translation languages from LibreTranslate
-
-⚡ **Threaded Processing**
-
-* Smooth UI with background OCR processing
-* No freezing or lag
+Capture text from any selected region of your screen and instantly translate it into your desired language.
 
 ---
 
-## 🖥️ Demo
+## ✨ Overview
 
+This project provides a **movable, resizable, always-on-top overlay** that continuously captures text from the screen, performs OCR using **Tesseract**, and translates it in real time using **LibreTranslate**.
+
+### 🎯 Perfect for
+
+* 🎮 In-game text translation *(for stable UI text and dialogues)*
+* 📚 PDFs, books & study material
+* 📖 Manga and comic panels
+* 🌐 Websites and multilingual web pages
+* 🌏 Apps and desktop interfaces
+
+---
+
+## 🚀 Project Status
+
+* ⚠️ **Level 1 (Early Stage)**
+* ✅ Core system is working
+* 🚀 Performance & features will improve in future versions
+
+---
+
+## 🚀 Key Features
+
+* ⚡ **Real-time OCR + Translation**
+* 🧠 **Smart caching** to avoid duplicate translations
+* 🎯 **Stable text detection** to reduce flickering
+* 🪟 **Draggable & resizable overlay**
+* 🌍 **Dynamic language detection**
+* 🧵 **Threaded OCR worker**
+* 💻 **Offline-capable local translation server**
+
+---
+
+## 🖼️ Workflow
+
+```text
+[ 📸 Screen Capture ] → [ 🔍 OCR Engine ] → [ 🌐 Translation ] → [ 🪟 Overlay Display ]
 ```
-[ Screen Capture ] → [ OCR Engine ] → [ Translation ] → [ Overlay Display ]
-```
+
+> ⚡ **Live real-time processing pipeline**
 
 ---
 
 ## 📂 Project Structure
 
-```
+```text id="zry3j0"
 live_screen_translator/
 │
 ├── main.py
@@ -68,7 +70,8 @@ live_screen_translator/
 │   ├── language_menu.py
 │
 ├── scripts/
-│   └── install_models.py
+│   ├── install_models.py
+│   ├── install_tesseract_models.py
 │
 ├── requirements.txt
 └── README.md
@@ -78,207 +81,110 @@ live_screen_translator/
 
 ## ⚙️ Installation
 
-### 1️⃣ Clone the repository
+### 1️⃣ Clone repository
 
-```
+```bash id="mgh4za"
 git clone https://github.com/Strike2Verse/live_screen_translator.git
 cd live_screen_translator
 ```
 
----
-
 ### 2️⃣ Create virtual environment
 
-```
+```bash id="fpy57x"
 python -m venv venv
 venv\Scripts\activate
 ```
 
----
-
 ### 3️⃣ Install dependencies
 
-```
+```bash id="gmn4k7"
 pip install -r requirements.txt
 ```
 
 ---
 
-## 🔤 Install Tesseract OCR (WITH Language Models)
+## 🔤 Install Tesseract OCR
 
-Download and install Tesseract:
+> 💡 **Recommended:** Install Tesseract outside the `C:` drive to avoid permission issues when adding language files later.
+
+Download Tesseract:
 
 👉 https://github.com/UB-Mannheim/tesseract/wiki
 
----
-
-### ⚠️ IMPORTANT: Select Language Data During Installation
-
-When installing Tesseract on Windows:
-
-✅ **Make sure you select the language packs you need**
-
-Recommended languages for this project:
+### 🌟 Recommended languages
 
 * English (`eng`)
 * Japanese (`jpn`)
 * Hindi (`hin`)
 * Korean (`kor`)
-* Marathi (`mar`)
-* Chinese Simplified (`chi_sim`)
 
----
+### ➕ Optional languages
 
-### 📦 If you skipped languages during install
+* Russian (`rus`)
+* French (`fra`)
+* Spanish (`spa`)
 
-You can manually add them:
+Verify installation:
 
-1. Go to Tesseract install folder:
-
-```txt
-C:\Program Files\Tesseract-OCR\tessdata
-```
-
-2. Download `.traineddata` files from:
-   👉 https://github.com/tesseract-ocr/tessdata_best
-
-3. Place them inside the `tessdata` folder
-
----
-
-### ✅ Verify installation
-
-Run:
-
-```bash
+```bash id="lq7v40"
 tesseract --list-langs
 ```
 
-Expected output:
-
-```txt
-eng
-jpn
-hin
-kor
-mar
-chi_sim
-```
-
 ---
 
-### 🔥 Why this is important
+## 🌍 Setup LibreTranslate
 
-Your app dynamically loads OCR languages from Tesseract.
+Install manually if needed:
 
-👉 If language data is missing:
-
-* It will NOT appear in dropdown
-* OCR will fail for that language
-
----
-
-### 💡 Pro Tip
-
-Install only the languages you actually need to:
-
-* Reduce memory usage
-* Improve OCR performance
-
----
-
-## 🌍 Setup LibreTranslate (Local Server)
-
-### 📦 Installation
-
-LibreTranslate is already included in the `requirements.txt`.
-
-So when you run:
-
-```bash
-pip install -r requirements.txt
-```
-
-👉 It should install automatically.
-
----
-
-### ⚠️ If LibreTranslate is NOT installed
-
-Run manually:
-
-```bash
+```bash id="c29w9u"
 pip install libretranslate argostranslate
 ```
 
----
+### 🚀 Start server (recommended preload)
 
-### ▶️ Start the LibreTranslate Server
+```bash id="g7d6ke"
+libretranslate --load-only en,fr,ru,es,hi,ko,ja
+```
 
-After installation, start the server by simply running:
+### 🔁 Alternative start command
 
-```bash
+```bash id="65k4my"
 libretranslate
 ```
 
-OR explicitly:
+> ⚠️ Using only `--load-only` may hide newly downloaded languages.
+> After installing more models, use `libretranslate`.
 
-```bash
-libretranslate --host 127.0.0.1 --port 5000
-```
+Verify:
 
----
-
-### ✅ Verify Server is Running
-
-Open in browser:
-
-```text
+```text id="1vbz3l"
 http://127.0.0.1:5000/languages
 ```
 
-👉 You should see available languages in JSON format.
-
 ---
 
-### ⚠️ Important Notes
+## 📦 Install Language Models
 
-* Keep the server **running in background** while using the app
-* First run may take time (downloads base models)
-* You must install language models separately (see below section)
+### 🌐 Translation models
 
----
-
-### 💡 Tip
-
-If `libretranslate` command is not recognized:
-
-```bash
-python -m libretranslate
-```
-
----
-
-## 📦 Install Translation Models
-
-Run:
-
-```
+```bash id="d2x7kw"
 python scripts/install_models.py
 ```
 
-Or manually:
+### 🔤 OCR language files
 
+```bash id="d4q6fs"
+python scripts/install_tesseract_models.py
 ```
-python -m argostranslate.cli --install ja en
-python -m argostranslate.cli --install en hi
-```
+
+> 💡 Forgot a language during setup?
+> Simply rerun the scripts anytime.
 
 ---
 
-## ▶️ Run the Application
+## ▶️ Run Application
 
-```
+```bash id="r2lz90"
 python main.py
 ```
 
@@ -286,57 +192,97 @@ python main.py
 
 ## 🎮 Controls
 
-| Action         | Key                      |
-| -------------- | ------------------------ |
-| Move Overlay   | Drag mouse               |
-| Resize Overlay | Drag bottom-right corner |
-| Exit           | `ESC`                    |
+| Action             | Control                        |
+| ------------------ | ------------------------------ |
+| Move overlay       | 🖱 Drag mouse                  |
+| Resize overlay     | 🔷 Drag small blue rounded box |
+| Exit app           | ⌨ `ESC`                        |
+| Exit from terminal | ⌨ `Ctrl + C`                   |
 
 ---
 
 ## 🧠 How It Works
 
-1. Capture screen region
-2. Preprocess image (grayscale, blur, scaling)
-3. Extract text using OCR
-4. Stabilize text across frames
-5. Translate using LibreTranslate
-6. Render overlay with translated text
+```text id="x03psd"
+Capture → Preprocess → OCR → Translate → Overlay
+```
+
+* Captures selected screen region
+* Preprocesses image for OCR
+* Extracts text using Tesseract
+* Filters low-confidence results
+* Translates text using LibreTranslate
+* Displays translated text in overlay pills
 
 ---
 
 ## ⚡ Performance Optimizations
 
-* Frame skipping while moving overlay
-* OCR confidence filtering
-* Text similarity detection
-* Translation caching
-* Thread pool execution
+* 🎯 OCR confidence filtering
+* 🧠 LRU translation cache
+* 🧵 Thread pool worker execution
+* ⏭ Frame skipping while moving overlay
+* 🧹 Duplicate text suppression
 
 ---
 
-## ⚠️ Requirements
+## 🛠 Tech Stack
 
-* Python 3.9+
-* Tesseract OCR installed
-* LibreTranslate running locally
+* Python
+* PySide6
+* OpenCV
+* Tesseract OCR
+* LibreTranslate
+* NumPy
+
+---
+
+## ⚠️ Important Usage Notes
+
+### 🔍 OCR Accuracy Tip
+
+Selecting a very small capture area can weaken OCR and produce messy translations.
+✨ Use a slightly larger clear region for best results.
+
+### 🌐 Chinese Language Support
+
+Chinese translation is currently **not included** due to network-dependent issues and inconsistent offline behavior.
+
+🚀 Improved support may be added in future versions.
+
+### 🪟 Overlay Resize Instruction
+
+Use the **small blue rounded resize box** at the **bottom-right corner**.
+
+---
+
+## 🌐 Project Mode
+
+This project follows an **online-first, offline-later workflow**.
+
+### 📦 Required setup
+
+* Python dependencies
+* Tesseract OCR language packs
+* LibreTranslate local server
+* translation models
+
+Once installed, it becomes **offline-capable**.
 
 ---
 
 ## 🚀 Future Improvements
 
-* 🔥 Auto-download language models
-* 🎯 GPU-based OCR acceleration
-* 🌐 Multi-hop translation optimization
-* 🎨 UI customization panel
-* 📦 Windows executable (.exe)
+* 🎨 Theme customization
+* 📦 Windows executable build
+* 🌐 Better Chinese support
+* 🌍 Improved multilingual spacing correction
 
 ---
 
 ## 🤝 Contributing
 
-Pull requests are welcome!
-Feel free to open issues or suggest features.
+Contributions, issues, and feature suggestions are welcome.
 
 ---
 
@@ -348,6 +294,6 @@ MIT License
 
 ## ⭐ Support
 
-If you like this project, give it a ⭐ on GitHub!
+If you like this project, consider giving it a **⭐ star on GitHub**.
 
----
+It helps a lot and supports future improvements.
