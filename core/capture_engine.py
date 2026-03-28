@@ -10,34 +10,40 @@ class CaptureEngine:
         self.overlay = overlay
 
     def capture_frame(self):
+        # Skip capture while user is interacting with overlay
         if self.overlay.is_interacting():
             return None
 
         try:
+            # Temporarily hide overlay to avoid capturing it
             self.overlay.hide_overlay = True
             self.overlay.update()
             QApplication.processEvents()
-            time.sleep(0.03)
+            time.sleep(0.02)
 
             screen = QGuiApplication.primaryScreen()
             geo = self.overlay.geometry()
 
-            shot = screen.grabWindow(0, geo.x(), geo.y(), geo.width(), geo.height())
+            # Capture selected screen region
+            shot = screen.grabWindow(
+                0, geo.x(), geo.y(), geo.width(), geo.height()
+            )
+
             img = shot.toImage()
 
+            # Restore overlay visibility
             self.overlay.hide_overlay = False
             self.overlay.update()
 
             if img.isNull():
                 return None
 
+            # Convert QImage → OpenCV format (BGR)
             w, h = img.width(), img.height()
             ptr = img.bits()
+            arr = np.asarray(ptr, dtype=np.uint8).reshape((h, w, 4))
 
-            arr = np.frombuffer(ptr, dtype=np.uint8).reshape((h, w, 4))
-            frame = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
-
-            return frame
+            return cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
 
         except Exception as e:
             print("[CAPTURE FAIL]", e)

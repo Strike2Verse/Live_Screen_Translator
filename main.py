@@ -2,11 +2,11 @@ import os
 import sys
 import signal
 import traceback
-import warnings  # 🔥 ADDED
+import warnings
 
-# 🔥 OPTIONAL: hide requests warning
-warnings.filterwarnings("ignore", category=UserWarning)  # 🔥 ADDED
+warnings.filterwarnings("ignore", category=UserWarning)
 
+# Disable Qt DPI scaling inconsistencies
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 os.environ["QT_SCALE_FACTOR"] = "1"
 
@@ -21,38 +21,45 @@ from ui.overlay import Overlay
 from core.capture_engine import CaptureEngine
 from core.ocr_worker import OCRWorker
 
-
-# 🔥 SHOW ALL ERRORS
+# Global exception handler
 sys.excepthook = lambda t, v, tb: print("".join(traceback.format_exception(t, v, tb)))
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
+    # Thread pool for OCR processing
     app.threadpool = QThreadPool()
     app.threadpool.setMaxThreadCount(1)
 
     app.timer = QTimer()
+    app.current_worker = None
 
     def start_app(ocr_lang, source_lang, target_lang):
-        print("[DEBUG] start_app called")
-
         app.overlay = Overlay()
         app.overlay.show()
         app.overlay.raise_()
         app.overlay.activateWindow()
 
-        # ESC to exit
+        # Exit shortcut
         esc = QShortcut(QKeySequence("Esc"), app.overlay)
         esc.activated.connect(app.quit)
 
+        # Core components
         app.translator = Translator(source=source_lang, target=target_lang)
         app.ocr = OCREngine(app.translator, lang=ocr_lang)
         app.capture_engine = CaptureEngine(app.overlay)
 
         def capture():
             try:
-                if app.overlay.is_moving or app.threadpool.activeThreadCount() > 0:
+                # Skip processing if UI is inactive or busy
+                if not app.overlay.isVisible():
+                    return
+
+                if app.overlay.is_interacting():
+                    return
+
+                if app.threadpool.activeThreadCount() > 0:
                     return
 
                 frame = app.capture_engine.capture_frame()
@@ -60,34 +67,39 @@ if __name__ == "__main__":
                     return
 
                 worker = OCRWorker(app.ocr, frame)
-                worker.signals.done.connect(app.overlay.update_results)
+                app.current_worker = worker
 
+                worker.signals.done.connect(app.overlay.update_results)
                 app.threadpool.start(worker)
 
             except Exception as e:
                 print("[CAPTURE ERROR]", e)
 
         app.timer.timeout.connect(capture)
-        app.timer.start(900)
+        app.timer.start(2000) # Do not change the timer
 
         def cleanup():
             print("[SYSTEM] Cleaning...")
 
             app.timer.stop()
-            app.threadpool.waitForDone(3000)
 
-            if app.translator:
-                app.translator.clear_cache()
-                app.translator.close()
+            if app.current_worker:
+                app.current_worker.stop()
 
-            if app.ocr:
+            app.threadpool.waitForDone()
+
+            # Reset OCR state
+            if hasattr(app, "ocr") and app.ocr:
                 app.ocr.reset()
 
+            if hasattr(app, "translator") and app.translator:
+                print("[TRANSLATOR] Cleaned")
+
             print("[SYSTEM] Exit clean")
-            print("[SYSTEM] App closed successfully ✅")
 
         app.aboutToQuit.connect(cleanup)
 
+    # Launch language selection menu
     app.menu = LanguageMenu(start_app)
     app.menu.show()
 

@@ -4,63 +4,90 @@ import re
 
 
 class OCREngine:
-    def __init__(self, translator, lang="jpn"):
+    def __init__(self, translator, lang="eng"):
         self.lang = lang
         self.translator = translator
-        self.scale = 1.5
+        self.scale = 2.2
 
-        self.prev_text = ""
-        self.stable_count = 0
-        self.required_stable = 3
+        self.prev_boxes = []
+        self.debug = True
 
     def preprocess(self, image):
-        if image is None or image.size == 0:
-            return None
-
-        image = cv2.convertScaleAbs(image)
-
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+
+        # Improve OCR accuracy with scaling and edge-preserving filter
         gray = cv2.resize(gray, None, fx=self.scale, fy=self.scale)
+        gray = cv2.bilateralFilter(gray, 9, 75, 75)
 
         return gray
 
     def clean_text(self, text):
-        # keep letters + numbers + common punctuation
-        text = re.sub(r"[^\w\s.,!?。、！？…\-]+", "", text)
-
-        # remove repeated characters
-        text = re.sub(r"(.)\1{3,}", r"\1", text)
-
+        # Keep valid characters across languages
+        text = re.sub(r"[^\w\s.,!?。、！？…\-]", "", text)
         return text.strip()
 
-    def is_similar(self, a, b):
-        if not a or not b:
-            return False
-        return a[:30] == b[:30]
-
     def smart_join(self, words):
+        if not words:
+            return ""
+
+        text = " ".join(words)
         combined = "".join(words)
 
-        # if contains Latin characters → use space
-        if re.search(r"[a-zA-Z]", combined):
-            return " ".join(words)
+        # Latin / Cyrillic languages
+        if re.search(r"[a-zA-Z\u0400-\u04FF]", combined):
+            return text
 
-        # for CJK languages → no spaces
-        return combined
+        # Korean: merge fragmented syllables
+        if re.search(r"[\uAC00-\uD7AF]", combined):
+            parts = text.split()
+            merged, buf = [], ""
+
+            for p in parts:
+                if len(p) == 1:
+                    buf += p
+                else:
+                    if buf:
+                        merged.append(buf)
+                        buf = ""
+                    merged.append(p)
+
+            if buf:
+                merged.append(buf)
+
+            return " ".join(merged)
+
+        # Devanagari: fix matra spacing
+        if re.search(r"[\u0900-\u097F]", combined):
+            if re.search(r"\s+[\u093E-\u094D]", text):
+                text = re.sub(r"\s+([\u093E-\u094D])", r"\1", text)
+                text = re.sub(r"([\u0915-\u0939])\s+([\u093E-\u094D])", r"\1\2", text)
+            return text
+
+        # CJK: no spacing between characters
+        if re.search(r"[\u4E00-\u9FFF]", combined):
+            return "".join(words)
+
+        return text
 
     def run_ocr(self, image):
-        # 🔥 BONUS SAFETY
-        if image is None:
-            return []
+        psm = 6
+
+        # Extract full text for cleaner line reconstruction
+        full_text = pytesseract.image_to_string(
+            image,
+            config=f"--oem 3 --psm {psm} -l {self.lang}"
+        )
+
+        clean_lines = [line.strip() for line in full_text.split("\n") if line.strip()]
 
         data = pytesseract.image_to_data(
             image,
-            config=f"--oem 3 --psm 6 -l {self.lang}",
+            config=f"--oem 3 --psm {psm} -l {self.lang}",
             output_type=pytesseract.Output.DICT
         )
 
         blocks = {}
+        conf_map = {}
 
         for i in range(len(data["text"])):
             raw = data["text"][i].strip()
@@ -72,7 +99,7 @@ class OCREngine:
             except:
                 continue
 
-            if conf < 40:
+            if conf < 35:
                 continue
 
             text = self.clean_text(raw)
@@ -85,10 +112,8 @@ class OCREngine:
                 data["line_num"][i]
             )
 
-            x = data["left"][i]
-            y = data["top"][i]
-            w = data["width"][i]
-            h = data["height"][i]
+            x, y = data["left"][i], data["top"][i]
+            w, h = data["width"][i], data["height"][i]
 
             if key not in blocks:
                 blocks[key] = {
@@ -98,8 +123,11 @@ class OCREngine:
                     "x_max": x + w,
                     "y_max": y + h
                 }
+                conf_map[key] = [conf]
             else:
                 blocks[key]["words"].append(text)
+                conf_map[key].append(conf)
+
                 blocks[key]["x_min"] = min(blocks[key]["x_min"], x)
                 blocks[key]["y_min"] = min(blocks[key]["y_min"], y)
                 blocks[key]["x_max"] = max(blocks[key]["x_max"], x + w)
@@ -107,61 +135,87 @@ class OCREngine:
 
         lines = []
 
-        for b in blocks.values():
-            text = self.smart_join(b["words"])
+        sorted_blocks = sorted(blocks.items(), key=lambda b: (b[1]["y_min"], b[1]["x_min"]))
 
-            if len(text) < 2 or len(text) > 120:
+        for idx, (key, b) in enumerate(sorted_blocks):
+            # Prefer clean OCR line, fallback to word-based join
+            if idx < len(clean_lines):
+                text = clean_lines[idx]
+            else:
+                text = self.smart_join(b["words"])
+
+            if len(text) < 2:
                 continue
+
+            avg_conf = sum(conf_map[key]) / len(conf_map[key])
 
             lines.append({
                 "text": text,
+                "confidence": round(avg_conf, 1),
                 "x": int(b["x_min"] / self.scale),
                 "y": int(b["y_min"] / self.scale),
                 "w": int((b["x_max"] - b["x_min"]) / self.scale),
                 "h": int((b["y_max"] - b["y_min"]) / self.scale)
             })
 
-        return lines
+        overall_conf = (
+            sum([l["confidence"] for l in lines]) / len(lines)
+            if lines else 0
+        )
+
+        return lines, overall_conf
 
     def process(self, frame):
-        if frame is None or frame.size == 0:
+        if frame is None:
             return None
 
         frame = self.preprocess(frame)
-        lines = self.run_ocr(frame)
+        lines, avg_conf = self.run_ocr(frame)
 
-        if not lines:
-            return []   # 🔥 force clear overlay
+        if avg_conf < 45 or not lines:
+            return self.prev_boxes
 
-        full_text = "\n".join([l["text"] for l in lines])
+        # Sort lines top-to-bottom
+        lines = sorted(lines, key=lambda l: (l["y"], l["x"]))
 
-        if self.is_similar(full_text, self.prev_text):
-            self.stable_count += 1
-        else:
-            self.stable_count = 0
+        # Remove exact duplicate lines
+        seen = set()
+        filtered_lines = []
 
-        self.prev_text = full_text
+        for l in lines:
+            text = l["text"].strip()
 
-        if self.stable_count < self.required_stable:
-            return []   # 🔥 avoid stale overlay
+            if text in seen:
+                continue
 
-        texts = [line["text"] for line in lines]
+            seen.add(text)
+            filtered_lines.append(l)
 
+        lines = filtered_lines
+
+        texts = [l["text"] for l in lines]
         translations = self.translator.translate_batch(texts)
 
         results = []
+
         for line, translated in zip(lines, translations):
-            results.append({
+            result = {
+                "original": line["text"],
                 "translated": translated,
+                "confidence": line["confidence"],
                 "x": line["x"],
-                "y": line["y"],
+                "y": line["y"] - int(line["h"] * 0.15),
                 "w": line["w"],
                 "h": line["h"]
-            })
+            }
 
+            results.append(result)
+
+            if self.debug:
+                print(f"[OCR] ({line['confidence']}%) {line['text']} → {translated}")
+
+        self.prev_boxes = results
         return results
 
     def reset(self):
-        print("[OCR] Resetting...")
-        self.prev_text = ""
-        self.stable_count = 0
+        self.prev_boxes = []

@@ -23,16 +23,15 @@ class Overlay(QWidget):
         self.dragging = False
         self.resizing = False
         self.offset = None
-        self.resize_margin = 10
+        self.resize_margin = 14
 
-    def is_interacting(self):   # ✅ ADD THIS
+    def is_interacting(self):
         return self.dragging or self.resizing or self.is_moving
 
     def update_results(self, results):
-        # 🔥 ALWAYS HANDLE RESULTS
-
+        # Update overlay only when valid results are available
         if not results:
-            self.results = []   # clear overlay
+            self.results = []
             self.update()
             return
 
@@ -41,48 +40,90 @@ class Overlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
 
-        painter.setBrush(QColor(0, 120, 255, 30))
-        painter.setPen(QPen(QColor(0, 120, 255), 2, Qt.DashLine))
+        # Enable smooth rendering for text and shapes
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        # Draw selection border
+        painter.setBrush(QColor(0, 120, 255, 20))
+        painter.setPen(QPen(QColor(0, 120, 255, 2), 2, Qt.DashLine))
         painter.drawRect(self.rect())
 
         if self.hide_overlay:
             return
 
         for r in self.results:
-            metrics = painter.fontMetrics()
-            text_width = metrics.boundingRect(r["translated"]).width()
-
-            rect = QRect(
-                r["x"] + 3,
-                r["y"] + 3,
-                max(text_width + 20, r["w"]),
-                max(20, r["h"])
-            )
-
-            font = QFont("Noto Sans", 10, QFont.Bold)
-            if r["h"] > 50:
-                font.setPointSize(12)
-            elif r["h"] < 25:
-                font.setPointSize(8)
+            font = QFont()
+            font.setFamilies(["Segoe UI", "Arial", "Sans Serif"])
+            font.setPointSize(10)
+            font.setWeight(QFont.DemiBold)
+            font.setLetterSpacing(QFont.PercentageSpacing, 102)
 
             painter.setFont(font)
 
-            painter.setBrush(QColor(0, 0, 0, 200))
-            painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(rect, 10, 10)
+            metrics = painter.fontMetrics()
+            text_width = metrics.boundingRect(r["translated"]).width()
 
-            painter.setPen(QColor(255, 255, 255))
+            # Center translation above detected text
+            center_x = r["x"] + r["w"] // 2
+            width = max(text_width + 20, r["w"])
+
+            rect = QRect(
+                center_x - width // 2,
+                r["y"] + 2,
+                width,
+                max(22, r["h"])
+            )
+
+            # Shadow
+            shadow = rect.adjusted(2, 2, 2, 2)
+            painter.setBrush(QColor(0, 0, 0, 120))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(shadow, 10, 10)
+
+            # Background pill
+            painter.setBrush(QColor(20, 20, 20, 210))
+            painter.drawRoundedRect(rect, 12, 12)
+
+            # Adjust font size based on box height
+            if r["h"] > 50:
+                font.setPointSize(12)
+            elif r["h"] < 22:
+                font.setPointSize(9)
+            else:
+                font.setPointSize(10)
+
+            painter.setFont(font)
+
+            inner_rect = rect.adjusted(8, 4, -8, -4)
+
+            painter.setPen(QColor(245, 245, 245))
             painter.drawText(
-                rect,
+                inner_rect,
                 Qt.AlignCenter | Qt.TextWordWrap,
                 r["translated"]
             )
 
+        # Resize handle
+        handle_size = 16
+        painter.setBrush(QColor(0, 120, 255, 220))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(
+            QRect(
+                self.width() - handle_size,
+                self.height() - handle_size,
+                handle_size,
+                handle_size
+            ),
+            4, 4
+        )
+
     def mousePressEvent(self, event):
         pos = event.position().toPoint()
 
+        # Detect resize area (bottom-right corner)
         if abs(pos.x() - self.width()) < self.resize_margin and \
            abs(pos.y() - self.height()) < self.resize_margin:
             self.resizing = True
@@ -91,7 +132,6 @@ class Overlay(QWidget):
             self.offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
 
         self.is_moving = True
-        self.update()
 
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()

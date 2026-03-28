@@ -1,6 +1,8 @@
 import requests
 import re
 import time
+from collections import OrderedDict
+
 
 class Translator:
     def __init__(self, source="auto", target="en", host="http://127.0.0.1:5000"):
@@ -8,7 +10,10 @@ class Translator:
         self.target = target
         self.url = f"{host}/translate"
 
-        self.cache = {}
+        # LRU cache for repeated translations
+        self.cache = OrderedDict()
+        self.max_cache = 500
+
         self.last_request_time = 0
         self.min_delay = 0.1
 
@@ -22,90 +27,150 @@ class Translator:
             time.sleep(self.min_delay - elapsed)
         self.last_request_time = time.time()
 
-    # 🔥 SINGLE REQUEST FUNCTION
-    def translate_request(self, text, source, target):
-        self._rate_limit()
+    def fix_hindi_text(self, text):
+        # Merge fragmented short tokens for better translation
+        words = text.split()
+        fixed = []
+        buffer = ""
 
-        response = requests.post(
-            self.url,
-            json={
-                "q": text,
-                "source": source,
-                "target": target,
-                "format": "text"
-            },
-            timeout=5
+        for w in words:
+            if len(w) <= 2:
+                buffer += w
+            else:
+                if buffer:
+                    fixed.append(buffer)
+                    buffer = ""
+                fixed.append(w)
+
+        if buffer:
+            fixed.append(buffer)
+
+        return " ".join(fixed)
+
+    def is_bad_translation(self, text):
+        return (
+            not text or
+            len(text.strip()) < 2 or
+            re.fullmatch(r"[^\w\s]+", text)
         )
 
-        response.raise_for_status()
-        return response.json().get("translatedText", "").strip()
+    def translate_request(self, text):
+        self._rate_limit()
 
-    # 🔥 SAFE SINGLE LINE TRANSLATION
+        for _ in range(2):  # retry 2 times
+            try:
+                response = requests.post(
+                    self.url,
+                    json={
+                        "q": text,
+                        "source": self.source,
+                        "target": self.target,
+                        "format": "text"
+                    },
+                    timeout=15
+                )
+                response.raise_for_status()
+                return response.json().get("translatedText", "").strip()
+            except:
+                time.sleep(0.5)
+
+        return text
+
     def translate_line(self, text):
         if not text.strip():
             return ""
 
         key = self.normalize_key(text)
 
-        # ✅ CACHE HIT
+        # Return cached result if available
         if key in self.cache:
+            self.cache.move_to_end(key)
             return self.cache[key]
 
         try:
-            # 🔹 First attempt
-            translated = self.translate_request(
-                text,
-                self.source,
-                self.target
-            )
+            if self.source == "hi":
+                text = self.fix_hindi_text(text)
 
-            # 🔥 BAD OUTPUT CHECK
-            bad_output = (
-                not translated or
-                translated.strip() in [".", "...", "?", "!", "-", "—"] or
-                translated.strip() == text.strip()
-            )
+            translated = self.translate_request(text)
 
-            # 🔁 RETRY CLEANED TEXT
-            if bad_output:
-                cleaned = re.sub(r"[^\wぁ-んァ-ン一-龥\u4e00-\u9fff ]+", "", text)
-
-                if cleaned and cleaned != text:
-                    translated = self.translate_request(
-                        cleaned,
-                        self.source,
-                        self.target
-                    ).strip()
-
-            # 🔁 FINAL FALLBACK
-            if not translated:
+            if not translated or self.is_bad_translation(translated):
                 translated = text
 
-            # ✅ CACHE STORE
+            # Store in LRU cache
             self.cache[key] = translated
+
+            if len(self.cache) > self.max_cache:
+                self.cache.popitem(last=False)
 
             return translated
 
         except Exception as e:
-            print("[ERROR] Translation:", e)
+            print("[TRANSLATION ERROR]", e)
             return text
 
-    # 🔥 SAFE BATCH (internally line-by-line)
     def translate_batch(self, texts):
         if not texts:
             return []
 
         results = []
+        to_translate = []
+        index_map = []
 
-        for text in texts:
-            result = self.translate_line(text)
-            results.append(result)
+        # Resolve cached entries first
+        for i, t in enumerate(texts):
+            key = self.normalize_key(t)
+
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                results.append(self.cache[key])
+            else:
+                results.append(None)
+                to_translate.append(t)
+                index_map.append(i)
+
+        if to_translate:
+            try:
+                self._rate_limit()
+
+                response = requests.post(
+                    self.url,
+                    json={
+                        "q": to_translate,
+                        "source": self.source,
+                        "target": self.target,
+                        "format": "text"
+                    },
+                    timeout=15
+                )
+
+                response.raise_for_status()
+                data = response.json().get("translatedText", to_translate)
+
+                if isinstance(data, str):
+                    data = [data]
+
+                for i, translated in enumerate(data):
+                    idx = index_map[i]
+                    original = to_translate[i]
+                    key = self.normalize_key(original)
+
+                    if not translated or self.is_bad_translation(translated):
+                        translated = original
+
+                    results[idx] = translated
+                    self.cache[key] = translated
+
+                    if len(self.cache) > self.max_cache:
+                        self.cache.popitem(last=False)
+
+            except Exception as e:
+                print("[BATCH TRANSLATION ERROR]", e)
+
+                # Fallback to single-line translation
+                for i, t in zip(index_map, to_translate):
+                    results[i] = self.translate_line(t)
 
         return results
 
-    def clear_cache(self):
-        print("[CACHE] Clearing...")
-        self.cache.clear()
-
     def close(self):
-        print("[SESSION] Closing...")
+        print("[TRANSLATOR] Session closed")
