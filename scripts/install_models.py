@@ -1,5 +1,6 @@
 import argostranslate.package
 import argostranslate.translate
+import os
 
 
 # =========================================================
@@ -54,38 +55,13 @@ def install_pair(src, tgt, packages, installed_pairs):
             download_path = pkg.download()
 
             # Install package
-            argostranslate.package.install_from_path(download_path)
-
-            print(f"[DONE] {src} → {tgt}")
+            if os.name == "nt": # If windows:
+                argostranslate.package.install_from_path(download_path)
+            else: # If linux/mac: use sudo to avoid permission issues
+                argostranslate.package.install_from_path(pkg.download())
             return
 
     print(f"[ERROR] Model not found: {src} → {tgt}")
-
-
-# =========================================================
-# Install selected language with English bridge
-# This enables:
-# lang <-> English
-# and indirectly lang <-> other installed languages
-# =========================================================
-def install_language_with_english(lang_code, packages, installed_pairs):
-    # Install both directions
-    install_pair(lang_code, "en", packages, installed_pairs)
-    install_pair("en", lang_code, packages, installed_pairs)
-
-
-# =========================================================
-# Display language selection menu
-# =========================================================
-def show_menu():
-    print("\n========== LANGUAGE MODEL INSTALLER ==========")
-    print("Download language models using English bridge\n")
-
-    for key, (name, code) in LANGUAGES.items():
-        print(f"{key}. {name} ({code})")
-
-    print("0. Exit")
-
 
 # =========================================================
 # Main program loop
@@ -100,41 +76,18 @@ def main():
     packages = argostranslate.package.get_available_packages()
 
     while True:
-        # Refresh installed pairs every loop
-        installed_pairs = get_installed_pairs()
-
-        show_menu()
-
-        choice = input("\nEnter your choice: ").strip()
-
-        # Exit option
-        if choice == "0":
-            print("\n[EXIT] Installer closed")
-            break
-
-        # Invalid option
-        if choice not in LANGUAGES:
-            print("[ERROR] Invalid selection")
-            continue
-
-        # Selected language
-        language_name, language_code = LANGUAGES[choice]
-
-        print(f"\n[SELECTED] {language_name}")
-
-        # Install using English as bridge
-        install_language_with_english(
-            language_code,
-            packages,
-            installed_pairs
-        )
-
-        print(
-            f"\n[SUCCESS] {language_name} installed with English bridge"
-        )
-        print(
-            "This also enables translation with other installed languages."
-        )
+        print("\n=== Translation Model Installer ===")
+        for k, v in LANGUAGES.items(): print(f"{k}. {v[0]}")
+        print("0. Exit")
+        
+        choice = input("Select: ").strip()
+        if choice == "0": break
+        if choice in LANGUAGES:
+            code = LANGUAGES[choice][1]
+            installed = get_installed_pairs()
+            install_pair(code, "en", packages, installed)
+            install_pair("en", code, packages, installed)
+            print(f"[SUCCESS] {LANGUAGES[choice][0]} ready.")
 
 
 # =========================================================

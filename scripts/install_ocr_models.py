@@ -31,40 +31,16 @@ BASE_URL = (
 # =========================================================
 # Automatically detect Tesseract tessdata path
 # =========================================================
-def find_tessdata_path():
-    tesseract_cmd = shutil.which("tesseract")
-
-    if tesseract_cmd:
-        base_path = os.path.dirname(tesseract_cmd)
-        tessdata_path = os.path.join(base_path, "tessdata")
-
-        if os.path.exists(tessdata_path):
-            return tessdata_path
-
-    return None
-
-
-# =========================================================
-# Ask user for custom path if auto-detection fails
-# =========================================================
 def get_tessdata_path():
-    auto_path = find_tessdata_path()
-
-    if auto_path:
-        print(f"[INFO] Tesseract detected at:\n{auto_path}")
-        return auto_path
-
-    print("\n[WARNING] Tesseract path could not be detected automatically.")
-    print(
-        "Please install Tesseract in a directory other than C drive "
-        "if you face permission issues."
-    )
-
-    user_path = input(
-        "\nEnter full tessdata folder path manually: "
-    ).strip()
-
-    return user_path
+    tesseract_cmd = shutil.which("tesseract")
+    if tesseract_cmd:
+        path = os.path.join(os.path.dirname(tesseract_cmd), "tessdata")
+        if os.path.exists(path):
+            print(f"[INFO] Detected Tesseract path: {path}")
+            return path
+    
+    print("\n[WARNING] Tesseract path not found automatically.")
+    return input("Enter full 'tessdata' folder path manually: ").strip()
 
 
 # =========================================================
@@ -79,12 +55,10 @@ def download_language(lang_code, tessdata_path):
         print(f"[SKIP] {file_name} already exists")
         return
 
-    url = BASE_URL + file_name
-
     print(f"[DOWNLOAD] {file_name}")
 
     try:
-        response = requests.get(url, stream=True, timeout=30)
+        response = requests.get(BASE_URL + file_name, stream=True, timeout=30)
         response.raise_for_status()
 
         with open(file_path, "wb") as f:
@@ -98,45 +72,24 @@ def download_language(lang_code, tessdata_path):
 
 
 # =========================================================
-# Show menu
-# =========================================================
-def show_menu():
-    print("\n===== OCR LANGUAGE INSTALLER =====\n")
-
-    for key, (name, code) in LANGUAGES.items():
-        print(f"{key}. {name} ({code})")
-
-    print("0. Exit")
-
-
-# =========================================================
 # Main program
 # =========================================================
 def main():
-    tessdata_path = get_tessdata_path()
+    path = get_tessdata_path()
 
-    if not os.path.exists(tessdata_path):
-        print(f"[ERROR] Invalid path:\n{tessdata_path}")
+    if not path or not os.path.exists(path):
+        print("[ERROR] Invalid path. Exiting.")
         return
 
     while True:
-        show_menu()
-
-        choice = input("\nEnter choice: ").strip()
-
-        if choice == "0":
-            print("[EXIT]")
-            break
-
-        if choice not in LANGUAGES:
-            print("[ERROR] Invalid choice")
-            continue
-
-        name, code = LANGUAGES[choice]
-
-        print(f"\n[SELECTED] {name}")
-        download_language(code, tessdata_path)
-
+        print("\n=== OCR Language Installer ===")
+        for k, v in LANGUAGES.items(): print(f"{k}. {v[0]} ({v[1]})")
+        print("0. Exit")
+        
+        choice = input("Select: ").strip()
+        if choice == "0": break
+        if choice in LANGUAGES:
+            download_language(LANGUAGES[choice][1], path)
 
 # =========================================================
 # Entry point
